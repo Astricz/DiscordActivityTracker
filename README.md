@@ -4,6 +4,7 @@ A BetterDiscord plugin that tracks Discord user activity over time.
 
 It logs online status changes, game activity, custom statuses, usernames, and avatars so you can view patterns like when someone is usually online.
 
+⚠️WARNING DO NOT USE THIS WITHOUT USER CONSENT⚠️
 ---
 
 ## Preview
@@ -65,6 +66,6 @@ Inside the panel you can:
 
 ## Notes
 
-- Nothing is sent anywhere — everything stays on your PC
+- Nothing is sent anywhere, everything stays on your PC
 - Only users you manually select are tracked
 - Requires BetterDiscord
