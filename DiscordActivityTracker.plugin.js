@@ -1,14 +1,14 @@
 /**
  * @name DiscordActivityTracker
  * @description Track your friends' Discord activity. See when they're online, their patterns, and full status history.
- * @version 2.0.0
+ * @version 2.1.0
  * @author Astricz
  */
 
 module.exports = class ActivityTracker {
     getName()        { return "DiscordActivityTracker"; }
     getDescription() { return "Track friends' activity and see when they're usually online."; }
-    getVersion()     { return "2.0.0"; }
+    getVersion()     { return "2.1.0"; }
     getAuthor()      { return "Astricz"; }
 
     _defaultOptions() {
@@ -599,9 +599,12 @@ module.exports = class ActivityTracker {
             rect.addEventListener("mousemove", e => {
                 const wrap = modal.querySelector(".at-heatmap-wrap");
                 if (!wrap) return;
-                const r = wrap.getBoundingClientRect();
-                tip.style.left = (e.clientX - r.left + 10) + "px";
-                tip.style.top  = (e.clientY - r.top  - 32) + "px";
+                const wrapR   = wrap.getBoundingClientRect();
+                const tipW    = tip.offsetWidth || 160;
+                const spaceR  = wrapR.right - e.clientX;
+                const offsetX = spaceR < tipW + 16 ? -(tipW + 10) : 10;
+                tip.style.left = (e.clientX - wrapR.left + offsetX) + "px";
+                tip.style.top  = (e.clientY - wrapR.top  - 32) + "px";
             });
             rect.addEventListener("mouseleave", () => { tip.style.display = "none"; });
         });
@@ -672,7 +675,7 @@ module.exports = class ActivityTracker {
         return `
             <div class="at-header">
                 <div class="at-title-row">
-                    <svg width="15" height="15" viewBox="0 0 24 24" style="opacity:0.6;flex-shrink:0">
+                    <svg width="25" height="25" viewBox="0 0 24 24" style="flex-shrink:0">
                         <path fill="currentColor" fill-rule="evenodd" clip-rule="evenodd" d="M12 4C7 4 2.73 7.11 1 11.5 2.73 15.89 7 19 12 19s9.27-3.11 11-7.5C21.27 7.11 17 4 12 4zm0 12.5a5 5 0 1 1 0-10 5 5 0 0 1 0 10zm0-8a3 3 0 1 0 0 6 3 3 0 0 0 0-6z"/>
                     </svg>
                     <span class="at-title">Activity Tracker</span>
@@ -722,7 +725,7 @@ module.exports = class ActivityTracker {
 
             let content = "";
             if (tab === "overview") content = this._buildOverviewTab(uid, stats, platforms, pIcons, liveCs, liveGame);
-            if (tab === "heatmap")  content = this.buildHeatmap(uid);
+            if (tab === "heatmap")  content = this.buildHeatmap(uid) + this._buildHourlyChart(uid, stats);
             if (tab === "history")  content = this._buildHistoryTab(uid);
             if (tab === "avatars")  content = this._buildAvatarsTab(uid);
 
@@ -851,6 +854,26 @@ module.exports = class ActivityTracker {
         </div>`;
     }
 
+    _buildHourlyChart(uid, stats) {
+        if (!stats) return "";
+        const maxOnline = Math.max(...stats.hours.map(h => h.online), 1);
+        const bars = stats.hours.map((h, i) => {
+            const pct   = Math.round((h.online / maxOnline) * 100);
+            const lbl   = [0, 6, 12, 18].includes(i)
+                ? (i === 0 ? "12a" : i === 6 ? "6a" : i === 12 ? "12p" : "6p")
+                : "";
+            const tip   = `${this.formatHour(i)}: ${h.online} online / ${h.total} total`;
+            return `<div class="at-bar-wrap" title="${tip}">
+                <div class="at-bar" style="height:${Math.max(pct, 2)}%"></div>
+                <div class="at-bar-label">${lbl}</div>
+            </div>`;
+        }).join("");
+
+        return `
+            <div class="at-section-title" style="margin-top:14px">Hourly Pattern Average</div>
+            <div class="at-chart">${bars}</div>`;
+    }
+
     // ── Formatters ────────────────────────────────────────────────────────────
 
     formatTime(ts) {
@@ -879,8 +902,8 @@ module.exports = class ActivityTracker {
         #at-btn:hover { color:var(--interactive-hover);background:var(--background-modifier-hover); }
 
         #at-modal-overlay {
-            position:fixed;inset:0;background:rgb(0 0 0/.55);z-index:10000;
-            display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);
+            position:fixed;inset:0;background:rgb(0 0 0/.7);z-index:10000;
+            display:flex;align-items:center;justify-content:center;
         }
 
         .at-modal {
@@ -895,7 +918,7 @@ module.exports = class ActivityTracker {
         .at-modal[data-at-theme="light"] { --at-hi:#060607;--at-text:#313338;--at-muted:#5c5e66; }
 
         .at-header { display:flex;align-items:center;justify-content:space-between;padding:14px 16px 0; }
-        .at-title-row { display:flex;align-items:center;gap:7px; }
+        .at-title-row {display:flex; align-items:center; gap:7px; color:var(--at-hi);}
         .at-title { font-size:15px;font-weight:700;color:var(--at-hi); }
         .at-count {
             font-size:11px;color:var(--at-muted);
@@ -1048,8 +1071,61 @@ module.exports = class ActivityTracker {
             box-shadow:0 2px 8px rgba(0,0,0,.3);
         }
 
-        /* Avatar grid */
-        .at-pfp-grid { display:flex;flex-wrap:wrap;gap:8px;padding:4px 0 6px; }
+        /* Hourly bar chart */
+        .at-chart {
+            display:flex;align-items:flex-end;height:56px;gap:2px;
+            padding:0 0 18px;position:relative;
+        }
+        .at-bar-wrap {
+            flex:1;display:flex;flex-direction:column;
+            align-items:center;justify-content:flex-end;
+            height:100%;position:relative;cursor:default;
+        }
+        .at-bar {
+            width:100%;background:#5865f2;
+            border-radius:2px 2px 0 0;min-height:1px;opacity:.75;
+            transition:opacity .1s;
+        }
+        .at-bar-wrap:hover .at-bar { opacity:1; }
+        .at-bar-label { position:absolute;bottom:-14px;font-size:8px;color:var(--at-muted);white-space:nowrap; }
+
+        /* Custom Scrollbars */
+        .at-user-list, .at-log, .at-heatmap-svg-wrap, .at-pfp-grid {
+            scrollbar-width:thin;
+            scrollbar-color:var(--scrollbar-thin-thumb,rgba(255,255,255,.1)) transparent;
+        }
+        .at-user-list::-webkit-scrollbar,
+        .at-log::-webkit-scrollbar,
+        .at-heatmap-svg-wrap::-webkit-scrollbar,
+        .at-pfp-grid::-webkit-scrollbar { width:3px;height:3px; }
+        .at-user-list::-webkit-scrollbar-track,
+        .at-log::-webkit-scrollbar-track,
+        .at-heatmap-svg-wrap::-webkit-scrollbar-track,
+        .at-pfp-grid::-webkit-scrollbar-track { background:transparent;margin:4px 0; }
+        .at-user-list::-webkit-scrollbar-thumb,
+        .at-log::-webkit-scrollbar-thumb,
+        .at-heatmap-svg-wrap::-webkit-scrollbar-thumb,
+        .at-pfp-grid::-webkit-scrollbar-thumb {
+            background:var(--scrollbar-thin-thumb,rgba(255,255,255,.12));
+            border-radius:99px;min-height:32px;
+        }
+        .at-user-list:hover::-webkit-scrollbar-thumb,
+        .at-log:hover::-webkit-scrollbar-thumb,
+        .at-heatmap-svg-wrap:hover::-webkit-scrollbar-thumb,
+        .at-pfp-grid:hover::-webkit-scrollbar-thumb {
+            background:var(--scrollbar-thin-thumb,rgba(255,255,255,.2));
+        }
+        .at-modal[data-at-theme="light"] .at-user-list::-webkit-scrollbar-thumb,
+        .at-modal[data-at-theme="light"] .at-log::-webkit-scrollbar-thumb,
+        .at-modal[data-at-theme="light"] .at-heatmap-svg-wrap::-webkit-scrollbar-thumb,
+        .at-modal[data-at-theme="light"] .at-pfp-grid::-webkit-scrollbar-thumb { background:rgba(0,0,0,.15); }
+        .at-modal[data-at-theme="light"] .at-user-list:hover::-webkit-scrollbar-thumb,
+        .at-modal[data-at-theme="light"] .at-log:hover::-webkit-scrollbar-thumb,
+        .at-modal[data-at-theme="light"] .at-heatmap-svg-wrap:hover::-webkit-scrollbar-thumb,
+        .at-modal[data-at-theme="light"] .at-pfp-grid:hover::-webkit-scrollbar-thumb { background:rgba(0,0,0,.3); }
+
+        /* Avatar grid scrollable */
+        .at-pfp-grid { max-height:200px;overflow-y:auto; }
         .at-pfp-entry { display:flex;flex-direction:column;align-items:center;gap:3px; }
         .at-pfp-img {
             width:48px;height:48px;border-radius:50%;object-fit:cover;
